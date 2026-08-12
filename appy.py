@@ -89,7 +89,8 @@ def gerar_zip_declaracoes(df):
             
             # Flexibilidade: busca na coluna 'cargo', se não achar, tenta 'unidade'
             cargo = str(row.get('cargo', row.get('unidade', ''))).strip()
-            siape = str(row.get('cpf', '')).strip()
+            # Leitura exclusiva da coluna SIAPE
+            siape = str(row.get('siape', '')).strip()
             unidade_dept = str(row.get('uadnome', '')).strip()
             
             sistemas = []
@@ -117,7 +118,7 @@ def gerar_zip_declaracoes(df):
 st.divider()
 
 st.subheader("Carregar Dados")
-st.info("A planilha deve conter as colunas: **NOME**, **CARGO** (ou **UNIDADE**), **CPF**, **UADNOME**, **SOLICITADO** e as colunas de sistemas **SIAFI**, **SCDP** e **TG**.")
+st.info("A planilha deve conter as colunas: **NOME**, **CARGO** (ou **UNIDADE**), **SIAPE**, **UADNOME**, **SOLICITADO** e as colunas de sistemas **SIAFI**, **SCDP** e **TG**.")
 
 uploaded_file = st.file_uploader("Envie a planilha Excel (.xlsx)", type=["xlsx", "xls"])
 
@@ -128,8 +129,8 @@ if uploaded_file:
     # Padronizando o nome das colunas
     df.columns = df.columns.str.strip().str.lower()
     
-    # Nova lista de colunas obrigatórias flexível (não exige estritamente 'unidade')
-    colunas_obrigatorias = ['nome', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg', 'solicitado']
+    # Nova lista de colunas obrigatórias com o 'siape' correto
+    colunas_obrigatorias = ['nome', 'siape', 'uadnome', 'siafi', 'scdp', 'tg', 'solicitado']
     colunas_presentes = [col for col in colunas_obrigatorias if col in df.columns]
     
     # Verifica se há a coluna de cargo ou unidade
@@ -149,7 +150,7 @@ if uploaded_file:
         if len(df_filtrado) > 0:
             # Seleciona qual coluna exibir no preview da tabela
             col_cargo_exibicao = 'cargo' if 'cargo' in df.columns else 'unidade'
-            st.dataframe(df_filtrado[['nome', col_cargo_exibicao, 'cpf', 'uadnome', 'solicitado', 'siafi', 'scdp', 'tg']].head())
+            st.dataframe(df_filtrado[['nome', col_cargo_exibicao, 'siape', 'uadnome', 'solicitado', 'siafi', 'scdp', 'tg']].head())
             
             if st.button("Gerar Declarações Solicitadas (Arquivo ZIP)", type="primary"):
                 with st.spinner("Lendo cruzamentos e gerando documentos..."):
