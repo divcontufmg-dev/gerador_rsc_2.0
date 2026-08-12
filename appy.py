@@ -90,17 +90,14 @@ def gerar_zip_declaracoes(df):
             siape = str(row.get('cpf', '')) 
             unidade_dept = str(row.get('uadnome', ''))
             
-            # Verificação das colunas de sistemas marcadas com "X" ou "x"
             sistemas = []
             if str(row.get('siafi', '')).strip().upper() == 'X':
                 sistemas.append("Sistema de Administração Financeira do Governo Federal (SIAFI);")
             if str(row.get('scdp', '')).strip().upper() == 'X':
                 sistemas.append("Sistema Concessão de Diárias e Passagens (SCDP);")
             if str(row.get('tg', '')).strip().upper() == 'X':
-                # Remove o ponto e vírgula do último se necessário, mas o padrão atual usa ponto e virgula ou sem formatação, adaptado:
                 sistemas.append("Tesouro Gerencial (TG)")
                 
-            # Correção rápida para colocar o ponto final no último item gerado
             if sistemas:
                 ultimo_item = sistemas[-1]
                 if ultimo_item.endswith(';'):
@@ -118,35 +115,42 @@ def gerar_zip_declaracoes(df):
 st.divider()
 
 st.subheader("Carregar Dados")
-st.info("A planilha deve conter as colunas obrigatórias: **NOME**, **UNIDADE**, **CPF**, **UADNOME** e as colunas de sistemas **SIAFI**, **SCDP** e **TG** (preenchidas com 'X').")
+st.info("A planilha deve conter as colunas obrigatórias: **NOME**, **UNIDADE**, **CPF**, **UADNOME**, **SOLICITADO** e as colunas de sistemas **SIAFI**, **SCDP** e **TG**.")
 
 uploaded_file = st.file_uploader("Envie a planilha Excel (.xlsx)", type=["xlsx", "xls"])
 
 if uploaded_file:
-    # Tratando as células vazias para não renderizarem o valor zero durante a extração
+    # Tratando as células vazias lendo o Excel estritamente como string
     df = pd.read_excel(uploaded_file, dtype=str).fillna("")
     
     # Padronizando o nome das colunas
     df.columns = df.columns.str.strip().str.lower()
     
-    colunas_obrigatorias = ['nome', 'unidade', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg']
+    colunas_obrigatorias = ['nome', 'unidade', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg', 'solicitado']
     colunas_presentes = [col for col in colunas_obrigatorias if col in df.columns]
     
     if len(colunas_presentes) < len(colunas_obrigatorias):
         st.error(f"Erro: A planilha enviada não contém todas as colunas esperadas. Colunas encontradas da lista obrigatória: {', '.join(colunas_presentes)}")
     else:
-        st.success(f"Planilha carregada com sucesso! {len(df)} servidores encontrados.")
-        st.dataframe(df[['nome', 'unidade', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg']].head())
+        # Filtra o DataFrame apenas para quem possui 'X' (maiúsculo ou minúsculo) na coluna 'solicitado'
+        df_filtrado = df[df['solicitado'].str.strip().str.upper() == 'X']
         
-        if st.button("Gerar Declarações (Arquivo ZIP)", type="primary"):
-            with st.spinner("Lendo cruzamentos e gerando documentos..."):
-                zip_file = gerar_zip_declaracoes(df)
-                
-            st.download_button(
-                label="📦 Baixar Lote Completo (ZIP)",
-                data=zip_file,
-                file_name="Declaracoes_RSC_Lote_Dinamico.zip",
-                mime="application/zip",
-                type="primary",
-                use_container_width=True
-            )
+        st.success(f"Planilha processada! {len(df_filtrado)} servidor(es) com declaração solicitada ('X') encontrados de um total de {len(df)} registros.")
+        
+        if len(df_filtrado) > 0:
+            st.dataframe(df_filtrado[['nome', 'unidade', 'cpf', 'uadnome', 'solicitado', 'siafi', 'scdp', 'tg']].head())
+            
+            if st.button("Gerar Declarações Solicitadas (Arquivo ZIP)", type="primary"):
+                with st.spinner("Lendo cruzamentos e gerando documentos..."):
+                    zip_file = gerar_zip_declaracoes(df_filtrado)
+                    
+                st.download_button(
+                    label="📦 Baixar Lote Filtrado (ZIP)",
+                    data=zip_file,
+                    file_name="Declaracoes_RSC_Lote_Filtrado.zip",
+                    mime="application/zip",
+                    type="primary",
+                    use_container_width=True
+                )
+        else:
+            st.warning("Nenhuma declaração foi marcada com 'X' na coluna 'SOLICITADO' para ser gerada.")
