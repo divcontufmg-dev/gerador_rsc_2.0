@@ -82,11 +82,13 @@ def gerar_zip_declaracoes(df, sistemas_selecionados):
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for index, row in df.iterrows():
             nome = str(row.get('nome', f'Servidor_{index}'))
-            cargo = str(row.get('cargo', ''))
-            siape = str(row.get('siape', ''))
-            unidade = str(row.get('unidade', ''))
             
-            docx_buffer = gerar_documento(nome, cargo, siape, unidade, sistemas_selecionados)
+            # Novo mapeamento de colunas baseado na planilha enviada
+            cargo = str(row.get('unidade', ''))
+            siape = str(row.get('cpf', '')) 
+            unidade_dept = str(row.get('uadnome', ''))
+            
+            docx_buffer = gerar_documento(nome, cargo, siape, unidade_dept, sistemas_selecionados)
             nome_arquivo = f"Declaracao_RSC_{nome.replace(' ', '_')}.docx"
             zip_file.writestr(nome_arquivo, docx_buffer.getvalue())
             
@@ -107,26 +109,25 @@ with col_sys3:
 st.divider()
 
 st.subheader("2. Carregar Dados")
-st.info("A planilha deve conter as colunas: **Nome**, **Cargo**, **SIAPE** e **Unidade**.")
+st.info("A planilha está mapeada para utilizar as colunas: **NOME**, **UNIDADE** (como Cargo), **CPF** (como SIAPE) e **UADNOME** (como Departamento).")
 
 uploaded_file = st.file_uploader("Envie a planilha Excel (.xlsx)", type=["xlsx", "xls"])
 
 if uploaded_file:
-    # Lendo tudo como string (dtype=str) para evitar que o SIAPE perca os zeros à esquerda
-    # O fillna("") garante que campos vazios não se tornem valores "0" ou "NaN" no documento
+    # Tratando as células vazias para não renderizarem o valor zero durante a extração
     df = pd.read_excel(uploaded_file, dtype=str).fillna("")
     
-    # Padronizando o nome das colunas para minúsculo e sem espaços sobrando
     df.columns = df.columns.str.strip().str.lower()
     
-    colunas_obrigatorias = ['nome', 'cargo', 'siape', 'unidade']
+    # Atualizando o filtro para buscar as novas colunas
+    colunas_obrigatorias = ['nome', 'unidade', 'cpf', 'uadnome']
     colunas_presentes = [col for col in colunas_obrigatorias if col in df.columns]
     
     if len(colunas_presentes) < 4:
-        st.error(f"Erro: A planilha enviada não contém todas as colunas obrigatórias. Colunas encontradas: {', '.join(colunas_presentes)}")
+        st.error(f"Erro: A planilha enviada não contém todas as colunas esperadas. Colunas encontradas: {', '.join(colunas_presentes)}")
     else:
         st.success(f"Planilha carregada com sucesso! {len(df)} servidores encontrados.")
-        st.dataframe(df[['nome', 'cargo', 'siape', 'unidade']].head())
+        st.dataframe(df[['nome', 'unidade', 'cpf', 'uadnome']].head())
         
         sistemas_selecionados = []
         if siafi: sistemas_selecionados.append("Sistema de Administração Financeira do Governo Federal (SIAFI)")
@@ -143,7 +144,7 @@ if uploaded_file:
                 st.download_button(
                     label="📦 Baixar Lote Completo (ZIP)",
                     data=zip_file,
-                    file_name="Declaracoes_RSC_Lote.zip",
+                    file_name="Declaracoes_RSC_Lote_Atualizado.zip",
                     mime="application/zip",
                     type="primary",
                     use_container_width=True
