@@ -59,12 +59,12 @@ def gerar_documento(nome, cargo, siape, unidade, sistemas_selecionados):
     
     doc.add_paragraph("")
     
-    # Data
+    # Data alinhada à esquerda com ponto final
     hoje = datetime.now()
-    data_atual = f"Belo Horizonte, {hoje.day} de {meses[hoje.month - 1]} de {hoje.year}"
+    data_atual = f"Belo Horizonte, {hoje.day} de {meses[hoje.month - 1]} de {hoje.year}."
     
     p_data = doc.add_paragraph(data_atual)
-    p_data.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p_data.alignment = WD_ALIGN_PARAGRAPH.LEFT
     
     doc.add_paragraph("\n")
     
