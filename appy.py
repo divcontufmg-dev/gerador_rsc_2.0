@@ -44,10 +44,14 @@ def gerar_documento(nome, cargo, siape, unidade, sistemas_selecionados):
     p1.add_run(unidade).bold = True
     p1.add_run(", possui ou possuiu o perfil de operador/executor desempenhando atividades que demandam acesso e utilização dos seguintes sistemas estruturantes do governo federal:")
     
-    # Lista numérica de sistemas
-    for i, sis in enumerate(sistemas_selecionados, 1):
-        p_sis = doc.add_paragraph(f"{i})\t{sis};")
-        p_sis.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    # Lista numérica de sistemas baseada no Excel
+    if sistemas_selecionados:
+        for i, sis in enumerate(sistemas_selecionados, 1):
+            p_sis = doc.add_paragraph(f"{i})\t{sis}")
+            p_sis.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    else:
+        p_vazio = doc.add_paragraph("Nenhum sistema estruturante registrado.")
+        p_vazio.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
     # Segundo parágrafo
     p2 = doc.add_paragraph("Esta declaração é a expressão da verdade e destina-se exclusivamente à instrução de processo administrativo de concessão da Gratificação por Reconhecimento de Saberes e Competências (GRSC).")
@@ -77,39 +81,44 @@ def gerar_documento(nome, cargo, siape, unidade, sistemas_selecionados):
     buffer.seek(0)
     return buffer
 
-def gerar_zip_declaracoes(df, sistemas_selecionados):
+def gerar_zip_declaracoes(df):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for index, row in df.iterrows():
             nome = str(row.get('nome', f'Servidor_{index}'))
-            
-            # Novo mapeamento de colunas baseado na planilha enviada
             cargo = str(row.get('unidade', ''))
             siape = str(row.get('cpf', '')) 
             unidade_dept = str(row.get('uadnome', ''))
             
-            docx_buffer = gerar_documento(nome, cargo, siape, unidade_dept, sistemas_selecionados)
+            # Verificação das colunas de sistemas marcadas com "X" ou "x"
+            sistemas = []
+            if str(row.get('siafi', '')).strip().upper() == 'X':
+                sistemas.append("Sistema de Administração Financeira do Governo Federal (SIAFI);")
+            if str(row.get('scdp', '')).strip().upper() == 'X':
+                sistemas.append("Sistema Concessão de Diárias e Passagens (SCDP);")
+            if str(row.get('tg', '')).strip().upper() == 'X':
+                # Remove o ponto e vírgula do último se necessário, mas o padrão atual usa ponto e virgula ou sem formatação, adaptado:
+                sistemas.append("Tesouro Gerencial (TG)")
+                
+            # Correção rápida para colocar o ponto final no último item gerado
+            if sistemas:
+                ultimo_item = sistemas[-1]
+                if ultimo_item.endswith(';'):
+                    sistemas[-1] = ultimo_item[:-1] + "."
+                elif not ultimo_item.endswith('.'):
+                    sistemas[-1] = ultimo_item + "."
+            
+            docx_buffer = gerar_documento(nome, cargo, siape, unidade_dept, sistemas)
             nome_arquivo = f"Declaracao_RSC_{nome.replace(' ', '_')}.docx"
             zip_file.writestr(nome_arquivo, docx_buffer.getvalue())
             
     zip_buffer.seek(0)
     return zip_buffer
 
-st.subheader("1. Configurações da Declaração")
-st.write("Quais sistemas devem constar nas declarações deste lote?")
-
-col_sys1, col_sys2, col_sys3 = st.columns(3)
-with col_sys1:
-    siafi = st.checkbox("SIAFI", value=True)
-with col_sys2:
-    scdp = st.checkbox("SCDP", value=True)
-with col_sys3:
-    tesouro = st.checkbox("Tesouro Gerencial")
-
 st.divider()
 
-st.subheader("2. Carregar Dados")
-st.info("A planilha está mapeada para utilizar as colunas: **NOME**, **UNIDADE** (como Cargo), **CPF** (como SIAPE) e **UADNOME** (como Departamento).")
+st.subheader("Carregar Dados")
+st.info("A planilha deve conter as colunas obrigatórias: **NOME**, **UNIDADE**, **CPF**, **UADNOME** e as colunas de sistemas **SIAFI**, **SCDP** e **TG** (preenchidas com 'X').")
 
 uploaded_file = st.file_uploader("Envie a planilha Excel (.xlsx)", type=["xlsx", "xls"])
 
@@ -117,35 +126,27 @@ if uploaded_file:
     # Tratando as células vazias para não renderizarem o valor zero durante a extração
     df = pd.read_excel(uploaded_file, dtype=str).fillna("")
     
+    # Padronizando o nome das colunas
     df.columns = df.columns.str.strip().str.lower()
     
-    # Atualizando o filtro para buscar as novas colunas
-    colunas_obrigatorias = ['nome', 'unidade', 'cpf', 'uadnome']
+    colunas_obrigatorias = ['nome', 'unidade', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg']
     colunas_presentes = [col for col in colunas_obrigatorias if col in df.columns]
     
-    if len(colunas_presentes) < 4:
-        st.error(f"Erro: A planilha enviada não contém todas as colunas esperadas. Colunas encontradas: {', '.join(colunas_presentes)}")
+    if len(colunas_presentes) < len(colunas_obrigatorias):
+        st.error(f"Erro: A planilha enviada não contém todas as colunas esperadas. Colunas encontradas da lista obrigatória: {', '.join(colunas_presentes)}")
     else:
         st.success(f"Planilha carregada com sucesso! {len(df)} servidores encontrados.")
-        st.dataframe(df[['nome', 'unidade', 'cpf', 'uadnome']].head())
+        st.dataframe(df[['nome', 'unidade', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg']].head())
         
-        sistemas_selecionados = []
-        if siafi: sistemas_selecionados.append("Sistema de Administração Financeira do Governo Federal (SIAFI)")
-        if scdp: sistemas_selecionados.append("Sistema Concessão de Diárias e Passagens (SCDP)")
-        if tesouro: sistemas_selecionados.append("Tesouro Gerencial")
-        
-        if not sistemas_selecionados:
-            st.warning("⚠️ Selecione pelo menos um sistema estruturante na etapa 1.")
-        else:
-            if st.button("Gerar Declarações (Arquivo ZIP)", type="primary"):
-                with st.spinner("Gerando documentos..."):
-                    zip_file = gerar_zip_declaracoes(df, sistemas_selecionados)
-                    
-                st.download_button(
-                    label="📦 Baixar Lote Completo (ZIP)",
-                    data=zip_file,
-                    file_name="Declaracoes_RSC_Lote_Atualizado.zip",
-                    mime="application/zip",
-                    type="primary",
-                    use_container_width=True
-                )
+        if st.button("Gerar Declarações (Arquivo ZIP)", type="primary"):
+            with st.spinner("Lendo cruzamentos e gerando documentos..."):
+                zip_file = gerar_zip_declaracoes(df)
+                
+            st.download_button(
+                label="📦 Baixar Lote Completo (ZIP)",
+                data=zip_file,
+                file_name="Declaracoes_RSC_Lote_Dinamico.zip",
+                mime="application/zip",
+                type="primary",
+                use_container_width=True
+            )
