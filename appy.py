@@ -85,10 +85,12 @@ def gerar_zip_declaracoes(df):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for index, row in df.iterrows():
-            nome = str(row.get('nome', f'Servidor_{index}'))
-            cargo = str(row.get('unidade', ''))
-            siape = str(row.get('cpf', '')) 
-            unidade_dept = str(row.get('uadnome', ''))
+            nome = str(row.get('nome', f'Servidor_{index}')).strip()
+            
+            # Flexibilidade: busca na coluna 'cargo', se não achar, tenta 'unidade'
+            cargo = str(row.get('cargo', row.get('unidade', ''))).strip()
+            siape = str(row.get('cpf', '')).strip()
+            unidade_dept = str(row.get('uadnome', '')).strip()
             
             sistemas = []
             if str(row.get('siafi', '')).strip().upper() == 'X':
@@ -115,7 +117,7 @@ def gerar_zip_declaracoes(df):
 st.divider()
 
 st.subheader("Carregar Dados")
-st.info("A planilha deve conter as colunas obrigatórias: **NOME**, **UNIDADE**, **CPF**, **UADNOME**, **SOLICITADO** e as colunas de sistemas **SIAFI**, **SCDP** e **TG**.")
+st.info("A planilha deve conter as colunas: **NOME**, **CARGO** (ou **UNIDADE**), **CPF**, **UADNOME**, **SOLICITADO** e as colunas de sistemas **SIAFI**, **SCDP** e **TG**.")
 
 uploaded_file = st.file_uploader("Envie a planilha Excel (.xlsx)", type=["xlsx", "xls"])
 
@@ -126,11 +128,18 @@ if uploaded_file:
     # Padronizando o nome das colunas
     df.columns = df.columns.str.strip().str.lower()
     
-    colunas_obrigatorias = ['nome', 'unidade', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg', 'solicitado']
+    # Nova lista de colunas obrigatórias flexível (não exige estritamente 'unidade')
+    colunas_obrigatorias = ['nome', 'cpf', 'uadnome', 'siafi', 'scdp', 'tg', 'solicitado']
     colunas_presentes = [col for col in colunas_obrigatorias if col in df.columns]
     
-    if len(colunas_presentes) < len(colunas_obrigatorias):
-        st.error(f"Erro: A planilha enviada não contém todas as colunas esperadas. Colunas encontradas da lista obrigatória: {', '.join(colunas_presentes)}")
+    # Verifica se há a coluna de cargo ou unidade
+    tem_cargo = 'cargo' in df.columns or 'unidade' in df.columns
+    
+    if len(colunas_presentes) < len(colunas_obrigatorias) or not tem_cargo:
+        faltantes = set(colunas_obrigatorias) - set(colunas_presentes)
+        if not tem_cargo:
+            faltantes.add("cargo (ou unidade)")
+        st.error(f"Erro: A planilha enviada não contém todas as colunas esperadas. Colunas faltando: {', '.join(faltantes)}")
     else:
         # Filtra o DataFrame apenas para quem possui 'X' (maiúsculo ou minúsculo) na coluna 'solicitado'
         df_filtrado = df[df['solicitado'].str.strip().str.upper() == 'X']
@@ -138,7 +147,9 @@ if uploaded_file:
         st.success(f"Planilha processada! {len(df_filtrado)} servidor(es) com declaração solicitada ('X') encontrados de um total de {len(df)} registros.")
         
         if len(df_filtrado) > 0:
-            st.dataframe(df_filtrado[['nome', 'unidade', 'cpf', 'uadnome', 'solicitado', 'siafi', 'scdp', 'tg']].head())
+            # Seleciona qual coluna exibir no preview da tabela
+            col_cargo_exibicao = 'cargo' if 'cargo' in df.columns else 'unidade'
+            st.dataframe(df_filtrado[['nome', col_cargo_exibicao, 'cpf', 'uadnome', 'solicitado', 'siafi', 'scdp', 'tg']].head())
             
             if st.button("Gerar Declarações Solicitadas (Arquivo ZIP)", type="primary"):
                 with st.spinner("Lendo cruzamentos e gerando documentos..."):
