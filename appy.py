@@ -145,24 +145,38 @@ if uploaded_file:
         # Filtra o DataFrame apenas para quem possui 'X' (maiúsculo ou minúsculo) na coluna 'solicitado'
         df_filtrado = df[df['solicitado'].str.strip().str.upper() == 'X']
         
-        st.success(f"Planilha processada! {len(df_filtrado)} servidor(es) com declaração solicitada ('X') encontrados de um total de {len(df)} registros.")
-        
         if len(df_filtrado) > 0:
-            # Seleciona qual coluna exibir no preview da tabela
-            col_cargo_exibicao = 'cargo' if 'cargo' in df.columns else 'unidade'
-            st.dataframe(df_filtrado[['nome', col_cargo_exibicao, 'siape', 'uadnome', 'solicitado', 'siafi', 'scdp', 'tg']].head())
+            # LÓGICA DE BLOQUEIO: Verifica se todos os sistemas estão em branco para algum servidor solicitado
+            cond_siafi = df_filtrado['siafi'].str.strip().str.upper() == 'X'
+            cond_scdp = df_filtrado['scdp'].str.strip().str.upper() == 'X'
+            cond_tg = df_filtrado['tg'].str.strip().str.upper() == 'X'
             
-            if st.button("Gerar Declarações Solicitadas (Arquivo ZIP)", type="primary"):
-                with st.spinner("Lendo cruzamentos e gerando documentos..."):
-                    zip_file = gerar_zip_declaracoes(df_filtrado)
-                    
-                st.download_button(
-                    label="📦 Baixar Lote Filtrado (ZIP)",
-                    data=zip_file,
-                    file_name="Declaracoes_RSC_Lote_Filtrado.zip",
-                    mime="application/zip",
-                    type="primary",
-                    use_container_width=True
-                )
+            df_sem_sistema = df_filtrado[~(cond_siafi | cond_scdp | cond_tg)]
+            
+            if not df_sem_sistema.empty:
+                st.error("❌ Processamento Bloqueado: Foram encontrados servidores com a declaração solicitada, mas sem nenhum sistema marcado.")
+                st.write("Verifique a lista abaixo, preencha as colunas SIAFI, SCDP ou TG na sua planilha e faça o upload novamente:")
+                
+                col_cargo_exibicao = 'cargo' if 'cargo' in df.columns else 'unidade'
+                st.dataframe(df_sem_sistema[['nome', col_cargo_exibicao, 'siape', 'siafi', 'scdp', 'tg']])
+            else:
+                st.success(f"Planilha aprovada! {len(df_filtrado)} servidor(es) com declaração solicitada ('X') prontos para geração.")
+                
+                # Seleciona qual coluna exibir no preview da tabela
+                col_cargo_exibicao = 'cargo' if 'cargo' in df.columns else 'unidade'
+                st.dataframe(df_filtrado[['nome', col_cargo_exibicao, 'siape', 'uadnome', 'solicitado', 'siafi', 'scdp', 'tg']].head())
+                
+                if st.button("Gerar Declarações Solicitadas (Arquivo ZIP)", type="primary"):
+                    with st.spinner("Lendo cruzamentos e gerando documentos..."):
+                        zip_file = gerar_zip_declaracoes(df_filtrado)
+                        
+                    st.download_button(
+                        label="📦 Baixar Lote Filtrado (ZIP)",
+                        data=zip_file,
+                        file_name="Declaracoes_RSC_Lote_Filtrado.zip",
+                        mime="application/zip",
+                        type="primary",
+                        use_container_width=True
+                    )
         else:
             st.warning("Nenhuma declaração foi marcada com 'X' na coluna 'SOLICITADO' para ser gerada.")
